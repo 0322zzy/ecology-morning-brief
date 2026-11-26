@@ -14,10 +14,65 @@
 
 每日晨报写入 `outputs/ecology-morning-brief/`。在同一个项目中运行可沿用历史，减少重复推荐。若需要定时接收晨报，在自己的 Codex 环境中创建自动化，并选择这个项目目录。
 
-## 自定义文献范围
+## 按需增加期刊
 
-- 单次调整时，在提示词中指定研究主题、期刊或时间窗口。
-- 长期调整时，按[配置说明](.agents/skills/ecology-morning-brief/references/configuration.md)复制一份本地配置，例如 `config/interests.local.yaml`，并在调用时指定该文件。
-- 默认仅依据启动配置和当前请求进行检索。如需从自己的聊天或项目文档更新研究兴趣，先启用上下文刷新，再参考[空白来源配置](.agents/skills/ecology-morning-brief/config/ecology-context-sources.example.json)和[设置步骤](.agents/skills/ecology-morning-brief/references/context-refresh-cli.md)。该功能取决于运行环境可用的访问工具。
+在 Codex 中直接说：
+
+> 使用 $ecology-morning-brief 生成今天的晨报，本次也巡检 Journal of Experimental Biology。
+
+> 将 Journal of Experimental Biology 加入以后每期的巡检名单。
+
+Codex 会核对期刊全名与 ISSN，将确认的期刊附加到现有巡检清单，并报告添加结果。日刊和周刊会按 ISSN 独立检索这些期刊，文章随后进入筛选与去重。单次请求使用临时配置，长期请求保存到本项目的 `config/interests.local.yaml`。你也可以让 Codex 按研究方向推荐并加入期刊，或直接提供 ISSN。
+
+如果已核对期刊信息，可以从仓库根目录执行：
+
+```bash
+SKILL_DIR="$PWD/.agents/skills/ecology-morning-brief"
+python3 "$SKILL_DIR/scripts/extend_journal_watch.py" \
+  --base "$SKILL_DIR/config/interests.yaml" \
+  --journal "Journal of Experimental Biology" 1477-9145 "The Journal of Experimental Biology" \
+  --output config/interests.local.yaml
+```
+
+已有本地配置时，将 `--base` 指向该文件以保留其中的设置。多本期刊可重复传入 `--journal`。
+
+## 根据聊天更新兴趣
+
+公开版包含从聊天和项目文档提取研究兴趣的功能，默认关闭。要启用它，在本地配置中设置 `context_refresh.enabled` 为 `true`，再按步骤添加自己授权的聊天或项目文件。它会累积有来源依据的主题和检索词，并在晨报中记录变化与读取限制。该功能取决于当前 Codex 环境可用的访问工具。 [空白来源配置](.agents/skills/ecology-morning-brief/config/ecology-context-sources.example.json) · [设置步骤](.agents/skills/ecology-morning-brief/references/context-refresh-cli.md)
+
+## 默认巡检期刊（28 本）
+
+这是每天按期刊独立巡检的名单。关键词检索也会从其他期刊发现相关论文。 [期刊配置](.agents/skills/ecology-morning-brief/config/interests.yaml)
+
+| 组别 | 期刊 | ISSN |
+| --- | --- | --- |
+| CNS 系列 | Nature | `0028-0836` |
+| CNS 系列 | Science | `0036-8075` |
+| CNS 系列 | Cell | `0092-8674` |
+| CNS 系列 | Nature Ecology & Evolution | `2397-334X` |
+| CNS 系列 | Nature Climate Change | `1758-678X` |
+| CNS 系列 | Nature Communications | `2041-1723` |
+| CNS 系列 | Nature Methods | `1548-7105` |
+| CNS 系列 | Nature Biotechnology | `1087-0156` |
+| CNS 系列 | Nature Machine Intelligence | `2522-5839` |
+| CNS 系列 | Nature Computational Science | `2662-8457` |
+| CNS 系列 | Nature Sustainability | `2398-9629` |
+| CNS 系列 | Nature Geoscience | `1752-0894` |
+| CNS 系列 | Nature Water | `2731-6084` |
+| CNS 系列 | Science Advances | `2375-2548` |
+| CNS 系列 | Current Biology | `0960-9822` |
+| CNS 系列 | Cell Systems | `2405-4712` |
+| CNS 系列 | Trends in Ecology & Evolution | `0169-5347` |
+| CNS 系列 | Trends in Genetics | `0168-9525` |
+| 综合科学 | Proceedings of the National Academy of Sciences | `0027-8424` |
+| 综合科学 | PNAS Nexus | `2752-6542` |
+| 生态学 | Ecology Letters | `1461-023X` |
+| 生态学 | Global Change Biology | `1354-1013` |
+| 生态学 | Methods in Ecology and Evolution | `2041-210X` |
+| 生态学 | Ecography | `0906-7590` |
+| 生态学 | Journal of Animal Ecology | `0021-8790` |
+| 生态学 | Functional Ecology | `0269-8463` |
+| 生态学 | Global Ecology and Biogeography | `1466-822X` |
+| 生态学 | Ecology | `0012-9658` |
 
 [查看命令行检索、结果核对和去重流程](.agents/skills/ecology-morning-brief/references/retrieval-v2.md)。
