@@ -1,0 +1,1448 @@
+{
+  "lookback_hours": 168,
+  "candidate_limit": 600,
+  "top_articles": 40,
+  "top_priority": 8,
+  "candidate_score_threshold": 12,
+  "request_timeout_seconds": 20,
+  "request_retries": 3,
+  "request_backoff_seconds": 1.0,
+  "title_similarity_threshold": 0.94,
+  "search": {
+    "mode": "daily",
+    "modes": {
+      "daily": {
+        "lookback_hours": 168,
+        "max_queries_per_module": 4,
+        "max_modules": 12,
+        "source_query_limits": {
+          "crossref": 32,
+          "europepmc": 32,
+          "openalex": 12,
+          "semantic_scholar": 12,
+          "arxiv": 1,
+          "webofscience": 8,
+          "google_scholar": 6
+        },
+        "max_seed_papers": 0,
+        "max_citations_per_seed": 0
+      },
+      "weekly-deep": {
+        "lookback_hours": 504,
+        "max_queries_per_module": 5,
+        "max_modules": 10,
+        "source_query_limits": {
+          "crossref": 32,
+          "europepmc": 32,
+          "openalex": 16,
+          "semantic_scholar": 16,
+          "arxiv": 2,
+          "webofscience": 10,
+          "google_scholar": 8
+        },
+        "max_seed_papers": 4,
+        "max_citations_per_seed": 20
+      },
+      "topic-deep": {
+        "lookback_hours": 87600,
+        "max_queries_per_module": 5,
+        "max_modules": 4,
+        "source_query_limits": {
+          "crossref": 20,
+          "openalex": 15,
+          "semantic_scholar": 15,
+          "arxiv": 5,
+          "webofscience": 5,
+          "google_scholar": 5
+        },
+        "max_seed_papers": 6,
+        "max_citations_per_seed": 30
+      }
+    },
+    "query_expansion": {
+      "enabled": true,
+      "query_types": [
+        "direct",
+        "mechanism",
+        "method",
+        "application",
+        "review",
+        "frontier_transfer"
+      ],
+      "max_terms_per_concept": 4,
+      "max_concept_blocks": 4
+    },
+    "citation_expansion": {
+      "daily": false,
+      "weekly-deep": true,
+      "topic-deep": true,
+      "max_hops": 1,
+      "sources": [
+        "openalex",
+        "semantic_scholar"
+      ]
+    },
+    "serendipity_fraction": 0.35,
+    "serendipity": {
+      "bridges": {
+        "mechanism": [
+          "physiology",
+          "thermal tolerance",
+          "acclimation",
+          "demography"
+        ],
+        "modelling_framework": [
+          "Bayesian",
+          "state-space",
+          "integrated population model",
+          "individual-based model",
+          "agent-based model",
+          "causal inference",
+          "machine learning"
+        ],
+        "ecological_scale": [
+          "population",
+          "community",
+          "ecosystem",
+          "landscape",
+          "range"
+        ],
+        "forecasting": [
+          "forecast",
+          "data assimilation",
+          "digital twin",
+          "scenario"
+        ],
+        "conservation_application": [
+          "conservation",
+          "management",
+          "vulnerability",
+          "persistence",
+          "extinction risk"
+        ],
+        "general_method": [
+          "simulation-based inference",
+          "causal inference",
+          "foundation model",
+          "active learning",
+          "optimal experimental design",
+          "uncertainty quantification",
+          "probabilistic programming",
+          "scientific machine learning",
+          "neural posterior estimation",
+          "conformal prediction",
+          "data fusion",
+          "self-supervised learning",
+          "benchmark",
+          "reproducible workflow"
+        ]
+      }
+    },
+    "coverage": {
+      "enabled": true,
+      "marginal_gain_threshold": 0.08,
+      "low_gain_streak": 2,
+      "minimum_relevant_for_high": 60
+    },
+    "boosters": {
+      "trigger_min_candidates": 80,
+      "daily": true,
+      "weekly-deep": true,
+      "topic-deep": true
+    },
+    "modules": {
+      "thermal_vulnerability": {
+        "label": "Thermal physiology and climate vulnerability",
+        "topic_keys": [
+          "thermal_ecology",
+          "time_dependent_tolerance",
+          "life_stage",
+          "reptile",
+          "climate_change"
+        ],
+        "taxa": [
+          "reptile",
+          "lizard",
+          "ectotherm",
+          "vertebrate"
+        ],
+        "processes": [
+          "thermal tolerance",
+          "heat tolerance",
+          "thermal sensitivity",
+          "thermal safety margin"
+        ],
+        "life_stages": [
+          "embryo",
+          "egg",
+          "juvenile",
+          "adult",
+          "ontogeny"
+        ],
+        "mechanisms": [
+          "physiology",
+          "behavior",
+          "development",
+          "acclimation"
+        ],
+        "risks": [
+          "climate change",
+          "warming",
+          "vulnerability",
+          "persistence",
+          "extinction risk"
+        ],
+        "methods": [
+          "mechanistic model",
+          "species distribution model",
+          "demographic model"
+        ],
+        "applications": [
+          "conservation",
+          "climate risk assessment"
+        ],
+        "preferred_sources": [
+          "crossref",
+          "europepmc"
+        ],
+        "optional_sources": [
+          "openalex",
+          "semantic_scholar",
+          "webofscience",
+          "google_scholar"
+        ]
+      },
+      "population_spatial": {
+        "label": "Population, stage-structured and spatial dynamics",
+        "topic_keys": [
+          "stage_structured_models",
+          "population_demography",
+          "spatial_population",
+          "sdm",
+          "individual_based_models"
+        ],
+        "taxa": [
+          "wildlife",
+          "species",
+          "population"
+        ],
+        "processes": [
+          "population persistence",
+          "vital rates",
+          "dispersal",
+          "range dynamics"
+        ],
+        "life_stages": [
+          "life stage",
+          "juvenile",
+          "adult"
+        ],
+        "mechanisms": [
+          "demography",
+          "movement",
+          "connectivity"
+        ],
+        "risks": [
+          "climate vulnerability",
+          "extinction risk",
+          "range shift"
+        ],
+        "methods": [
+          "integrated population model",
+          "stage-structured model",
+          "individual-based model",
+          "species distribution model"
+        ],
+        "applications": [
+          "population viability",
+          "conservation planning"
+        ],
+        "preferred_sources": [
+          "crossref",
+          "europepmc"
+        ],
+        "optional_sources": [
+          "openalex",
+          "semantic_scholar",
+          "webofscience",
+          "google_scholar"
+        ]
+      },
+      "forecasting_methods": {
+        "label": "Ecological forecasting, statistics and digital twins",
+        "topic_keys": [
+          "digital_twins",
+          "data_assimilation_forecasting",
+          "statistical_ecology",
+          "ai_ml_ecology"
+        ],
+        "taxa": [
+          "biodiversity",
+          "population",
+          "ecosystem"
+        ],
+        "processes": [
+          "ecological dynamics",
+          "biodiversity change",
+          "population change"
+        ],
+        "life_stages": [],
+        "mechanisms": [
+          "observation process",
+          "latent process",
+          "feedback"
+        ],
+        "risks": [
+          "uncertainty",
+          "forecast horizon",
+          "decision risk"
+        ],
+        "methods": [
+          "ecological forecasting",
+          "data assimilation",
+          "state-space model",
+          "digital twin",
+          "machine learning"
+        ],
+        "applications": [
+          "adaptive management",
+          "decision support",
+          "conservation forecasting"
+        ],
+        "preferred_sources": [
+          "crossref",
+          "europepmc"
+        ],
+        "optional_sources": [
+          "openalex",
+          "semantic_scholar",
+          "webofscience",
+          "google_scholar"
+        ]
+      },
+      "eco_evolutionary": {
+        "label": "Eco-evolutionary responses and adaptation",
+        "topic_keys": [
+          "eco_evolutionary",
+          "plasticity_adaptation",
+          "climate_change"
+        ],
+        "taxa": [
+          "population",
+          "species",
+          "ectotherm"
+        ],
+        "processes": [
+          "local adaptation",
+          "phenotypic plasticity",
+          "evolutionary rescue",
+          "thermal plasticity"
+        ],
+        "life_stages": [
+          "life stage",
+          "ontogeny"
+        ],
+        "mechanisms": [
+          "acclimation",
+          "genomic adaptation",
+          "population variation"
+        ],
+        "risks": [
+          "climate change",
+          "genomic vulnerability",
+          "persistence"
+        ],
+        "methods": [
+          "genomic vulnerability model",
+          "eco-evolutionary model",
+          "common garden"
+        ],
+        "applications": [
+          "evolutionary potential",
+          "conservation genetics"
+        ],
+        "preferred_sources": [
+          "crossref",
+          "europepmc"
+        ],
+        "optional_sources": [
+          "openalex",
+          "semantic_scholar",
+          "webofscience",
+          "google_scholar"
+        ]
+      },
+      "broader_conservation": {
+        "label": "Broader ecology and conservation",
+        "topic_keys": [
+          "conservation_biology",
+          "microclimate",
+          "behaviour"
+        ],
+        "taxa": [
+          "biodiversity",
+          "wildlife",
+          "species"
+        ],
+        "processes": [
+          "habitat selection",
+          "connectivity",
+          "resilience"
+        ],
+        "life_stages": [],
+        "mechanisms": [
+          "behavior",
+          "microclimate",
+          "ecological interaction"
+        ],
+        "risks": [
+          "climate change",
+          "biodiversity loss",
+          "extinction risk"
+        ],
+        "methods": [
+          "remote sensing",
+          "causal inference",
+          "monitoring"
+        ],
+        "applications": [
+          "protected area",
+          "adaptive management",
+          "conservation prioritization"
+        ],
+        "preferred_sources": [
+          "crossref",
+          "europepmc"
+        ],
+        "optional_sources": [
+          "openalex",
+          "semantic_scholar",
+          "webofscience",
+          "google_scholar"
+        ]
+      },
+      "community_biodiversity": {
+        "label": "Community ecology, biodiversity and ecosystem function",
+        "topic_keys": [
+          "community_biodiversity"
+        ],
+        "taxa": [
+          "biodiversity"
+        ],
+        "processes": [
+          "community assembly",
+          "ecosystem functioning",
+          "species interactions"
+        ],
+        "methods": [
+          "ecological network",
+          "field experiment"
+        ],
+        "mechanisms": [
+          "coexistence",
+          "trophic interactions"
+        ],
+        "risks": [
+          "biodiversity loss"
+        ],
+        "applications": [
+          "ecosystem restoration"
+        ],
+        "preferred_sources": [
+          "crossref",
+          "europepmc"
+        ],
+        "optional_sources": [
+          "openalex",
+          "semantic_scholar",
+          "webofscience"
+        ]
+      },
+      "global_change_earth": {
+        "label": "Global change, Earth systems and sustainability",
+        "topic_keys": [
+          "global_change_earth"
+        ],
+        "taxa": [
+          "ecosystem"
+        ],
+        "processes": [
+          "climate extremes",
+          "carbon cycle",
+          "tipping point"
+        ],
+        "methods": [
+          "remote sensing",
+          "Earth system model"
+        ],
+        "mechanisms": [
+          "feedback",
+          "resilience"
+        ],
+        "risks": [
+          "global change"
+        ],
+        "applications": [
+          "restoration",
+          "sustainability"
+        ],
+        "preferred_sources": [
+          "crossref",
+          "europepmc"
+        ],
+        "optional_sources": [
+          "openalex",
+          "semantic_scholar",
+          "webofscience"
+        ]
+      },
+      "frontier_methods": {
+        "label": "Transferable methods and ideas across disciplines",
+        "topic_keys": [
+          "transferable_methods"
+        ],
+        "queries": {
+          "direct": "\"causal inference\"",
+          "mechanism": "\"simulation-based inference\"",
+          "method": "\"foundation model\" biodiversity",
+          "application": "\"optimal experimental design\"",
+          "review": "\"uncertainty quantification\" review",
+          "frontier_transfer": "\"active learning\" \"scientific discovery\""
+        },
+        "taxa": [],
+        "processes": [
+          "scientific inference"
+        ],
+        "methods": [
+          "simulation-based inference",
+          "causal inference"
+        ],
+        "applications": [
+          "experimental design"
+        ],
+        "preferred_sources": [
+          "crossref",
+          "europepmc"
+        ],
+        "optional_sources": [
+          "openalex",
+          "semantic_scholar",
+          "webofscience"
+        ]
+      }
+    }
+  },
+  "sources": {
+    "crossref": {
+      "enabled": true,
+      "class": "core",
+      "provider": "Crossref REST API",
+      "rows_per_query": 60,
+      "max_articles": 2000
+    },
+    "biorxiv": {
+      "enabled": false,
+      "class": "supplement",
+      "provider": "bioRxiv API",
+      "max_articles": 60,
+      "max_pages": 3,
+      "categories": [
+        "ecology",
+        "evolutionary biology",
+        "zoology",
+        "animal behavior and cognition"
+      ]
+    },
+    "europepmc": {
+      "enabled": true,
+      "class": "core",
+      "provider": "Europe PMC API",
+      "page_size": 50,
+      "max_articles": 2000,
+      "max_articles_per_query": 100,
+      "max_pages_per_query": 2,
+      "published_only": true
+    },
+    "openalex": {
+      "enabled": true,
+      "class": "booster",
+      "provider": "OpenAlex API",
+      "page_size": 50,
+      "max_pages_per_query": 1,
+      "max_queries": 5,
+      "max_articles": 600
+    },
+    "semantic_scholar": {
+      "enabled": true,
+      "class": "booster",
+      "provider": "Semantic Scholar Academic Graph API",
+      "page_size": 50,
+      "max_pages_per_query": 1,
+      "max_queries": 5,
+      "max_articles": 600,
+      "request_interval_seconds": 1.1
+    },
+    "arxiv": {
+      "enabled": false,
+      "class": "supplement",
+      "provider": "arXiv API",
+      "max_articles": 80,
+      "max_queries": 3,
+      "request_interval_seconds": 3.0,
+      "categories": [
+        "q-bio.PE",
+        "q-bio.QM",
+        "q-bio.NC"
+      ]
+    },
+    "webofscience": {
+      "enabled": true,
+      "class": "booster",
+      "provider": "Clarivate Starter API",
+      "database": "WOS",
+      "page_size": 50,
+      "max_pages_per_query": 1,
+      "max_articles": 200
+    },
+    "google_scholar": {
+      "enabled": false,
+      "class": "booster",
+      "provider": "SerpApi",
+      "page_size": 20,
+      "max_pages_per_query": 1,
+      "max_articles": 100,
+      "language": "en"
+    },
+    "journal_watch": {
+      "enabled": true,
+      "class": "core",
+      "provider": "Crossref journal works + Europe PMC journal search",
+      "rows_per_journal": 60,
+      "max_pages_per_journal": 2,
+      "max_articles": 2500,
+      "epmc_batch_size": 6,
+      "epmc_max_articles_per_batch": 180
+    }
+  },
+  "retrieval_queries": [
+    "thermal ecology physiology microclimate ectotherm reptile",
+    "life stage ontogenetic thermal tolerance embryo adult climate vulnerability",
+    "thermal death time exposure duration thermal injury accumulation ectotherm",
+    "thermal plasticity acclimation local adaptation population variation CTmax",
+    "climate vulnerability adaptive capacity conservation planning biodiversity",
+    "population viability demographic vital rates stage structured model",
+    "metapopulation connectivity source sink dispersal spatial demography",
+    "individual based model ecological digital twin data assimilation forecasting",
+    "hierarchical Bayesian JSDM state space causal inference ecology",
+    "ecological machine learning foundation model biodiversity eco evolutionary"
+  ],
+  "wos_queries": [
+    "TS=((\"thermal tolerance\" OR \"thermal ecology\" OR CTmax OR \"thermal death time\" OR \"thermal injury accumulation\") AND (ectotherm* OR reptile* OR lizard* OR embryo* OR ontogen*))",
+    "TS=((\"climate vulnerability\" OR \"adaptive capacity\" OR \"local adaptation\" OR \"phenotypic plasticity\" OR \"genomic vulnerability\") AND (ecolog* OR biodiversity OR population* OR species))",
+    "TS=((\"population viability\" OR \"stage structured model\" OR \"integrated population model\" OR metapopulation* OR connectivity OR \"individual based model\") AND (ecolog* OR conservation OR wildlife OR species))",
+    "TS=((\"ecological forecasting\" OR \"data assimilation\" OR \"state space model\" OR \"hierarchical Bayesian\" OR JSDM OR INLA) AND (ecolog* OR biodiversity OR conservation OR population*))",
+    "TS=((\"ecological digital twin\" OR \"foundation model\" OR \"machine learning\" OR \"graph neural network\") AND (ecolog* OR biodiversity OR conservation OR species))"
+  ],
+  "openalex_queries": [
+    "(\"thermal tolerance\" OR \"thermal ecology\" OR CTmax OR \"thermal death time\") AND (ecology OR ectotherm OR reptile)",
+    "(\"life stage\" OR ontogenetic OR embryo OR hatchling) AND (\"thermal tolerance\" OR \"climate vulnerability\")",
+    "(\"local adaptation\" OR \"thermal plasticity\" OR acclimation OR \"population variation\") AND (ecology OR climate)",
+    "(\"population viability\" OR \"stage structured model\" OR metapopulation OR \"individual based model\") AND (ecology OR conservation)",
+    "(\"ecological forecasting\" OR \"data assimilation\" OR \"ecological digital twin\" OR \"machine learning\") AND (ecology OR biodiversity)"
+  ],
+  "semantic_scholar_queries": [
+    "thermal tolerance ecology ectotherm life stage",
+    "thermal death time exposure duration thermal injury ectotherm",
+    "climate vulnerability local adaptation thermal plasticity ecology",
+    "population viability stage structured metapopulation conservation ecology",
+    "ecological forecasting data assimilation biodiversity machine learning"
+  ],
+  "google_scholar_queries": [
+    "thermal tolerance ecology ectotherm life stage",
+    "thermal death time exposure duration thermal injury ectotherm",
+    "climate vulnerability local adaptation phenotypic plasticity ecology",
+    "population viability stage structured metapopulation conservation ecology",
+    "ecological forecasting data assimilation biodiversity machine learning"
+  ],
+  "europepmc_query": "(\"thermal ecology\" OR \"thermal physiology\" OR \"thermal tolerance\" OR \"thermal death time\" OR \"time-dependent thermal tolerance\" OR \"thermal injury accumulation\" OR \"thermal dose\" OR CTmax OR microclimate OR thermoregulation OR \"life stage\" OR ontogeny OR embryo OR hatchling OR \"climate vulnerability\" OR \"adaptive capacity\" OR \"population viability analysis\" OR \"stage structured model\" OR \"integrated population model\" OR \"Leslie matrix\" OR \"Lefkovitch matrix\" OR metapopulation OR connectivity OR \"source sink\" OR \"individual based model\" OR \"agent based model\" OR \"ecological digital twin\" OR \"biodiversity digital twin\" OR \"ecological forecasting\" OR \"data assimilation\" OR \"state space model\" OR \"hierarchical Bayesian\" OR JSDM OR INLA OR \"causal inference\" OR \"foundation model\" OR \"graph neural network\" OR \"eco evolutionary dynamics\" OR \"evolutionary rescue\" OR \"local adaptation\" OR \"genomic vulnerability\" OR reptile OR lizard)",
+  "primary_topics": {
+    "thermal_ecology": {
+      "label": "Thermal & physiological ecology",
+      "category": "Thermal & physiological ecology",
+      "weight": 1.0,
+      "keywords": [
+        "thermal ecology",
+        "thermal physiology",
+        "thermal tolerance",
+        "heat tolerance",
+        "CTmax",
+        "critical thermal maximum",
+        "thermal performance",
+        "heat stress",
+        "thermal safety margin",
+        "physiological ecology"
+      ]
+    },
+    "time_dependent_tolerance": {
+      "label": "Time-dependent thermal tolerance",
+      "category": "Thermal & physiological ecology",
+      "weight": 1.25,
+      "keywords": [
+        "thermal death time",
+        "time-dependent thermal tolerance",
+        "time dependent thermal tolerance",
+        "thermal injury accumulation",
+        "dynamic thermal tolerance",
+        "CTmax exposure duration",
+        "exposure duration",
+        "thermal dose",
+        "cumulative heat injury",
+        "heat injury accumulation"
+      ]
+    },
+    "life_stage": {
+      "label": "Life-stage thermal vulnerability",
+      "category": "Life-stage thermal vulnerability",
+      "weight": 1.15,
+      "keywords": [
+        "life stage",
+        "stage-specific",
+        "stage specific",
+        "ontogeny",
+        "ontogenetic",
+        "embryo",
+        "embryonic",
+        "egg incubation",
+        "egg thermal",
+        "egg trait",
+        "hatchling",
+        "larval stage",
+        "juvenile stage",
+        "full life cycle",
+        "embryo adult"
+      ]
+    },
+    "reptile": {
+      "label": "Reptile research",
+      "category": "Reptile research",
+      "weight": 1.0,
+      "keywords": [
+        "reptile",
+        "lizard",
+        "squamate",
+        "Lacertidae"
+      ]
+    },
+    "microclimate": {
+      "label": "Microclimate",
+      "category": "Thermal & physiological ecology",
+      "weight": 1.0,
+      "keywords": [
+        "microclimate",
+        "operative temperature",
+        "microhabitat",
+        "thermal landscape",
+        "nest temperature",
+        "thermal heterogeneity"
+      ]
+    },
+    "behaviour": {
+      "label": "Behaviour & thermoregulation",
+      "category": "Thermal & physiological ecology",
+      "weight": 0.85,
+      "keywords": [
+        "thermoregulation",
+        "behavioral thermoregulation",
+        "behavioural thermoregulation",
+        "behavioral buffering",
+        "behavioural buffering",
+        "habitat selection",
+        "nest-site selection",
+        "thermal refuge"
+      ]
+    },
+    "stage_structured_models": {
+      "label": "IPM & stage-structured models",
+      "category": "Population ecology & demography",
+      "weight": 1.3,
+      "keywords": [
+        "integrated population model",
+        "stage-structured model",
+        "stage structured model",
+        "Leslie matrix",
+        "Lefkovitch matrix",
+        "matrix population model",
+        "age-structured model",
+        "age structured model"
+      ]
+    },
+    "population_demography": {
+      "label": "Population ecology & demography",
+      "category": "Population ecology & demography",
+      "weight": 0.9,
+      "keywords": [
+        "population viability analysis",
+        "population viability",
+        "demographic model",
+        "population projection",
+        "vital rates",
+        "population growth rate",
+        "survival probability",
+        "reproductive success"
+      ]
+    },
+    "spatial_population": {
+      "label": "Spatial population dynamics",
+      "category": "Spatial dynamics & mechanistic models",
+      "weight": 0.85,
+      "keywords": [
+        "metapopulation",
+        "connectivity",
+        "source-sink",
+        "source sink",
+        "dispersal",
+        "spatial demography",
+        "range dynamics",
+        "colonization extinction"
+      ]
+    },
+    "sdm": {
+      "label": "Species distribution modelling",
+      "category": "Spatial dynamics & mechanistic models",
+      "weight": 1.0,
+      "keywords": [
+        "species distribution model",
+        "species distribution modelling",
+        "SDM",
+        "ecological niche model",
+        "ENM",
+        "habitat suitability",
+        "mechanistic niche model",
+        "mechanistic distribution model"
+      ]
+    },
+    "climate_change": {
+      "label": "Climate-change vulnerability",
+      "category": "Climate vulnerability & conservation",
+      "weight": 0.95,
+      "keywords": [
+        "climate change",
+        "global warming",
+        "climate vulnerability",
+        "stage-specific climate vulnerability",
+        "climate risk",
+        "extreme heat",
+        "adaptive capacity",
+        "exposure sensitivity",
+        "climate resilience",
+        "range shift"
+      ]
+    },
+    "conservation_biology": {
+      "label": "Conservation biology",
+      "category": "Climate vulnerability & conservation",
+      "weight": 0.75,
+      "keywords": [
+        "conservation planning",
+        "biodiversity conservation",
+        "protected areas",
+        "protected area",
+        "adaptive management",
+        "conservation priority",
+        "conservation prioritization",
+        "climate refugia"
+      ]
+    },
+    "individual_based_models": {
+      "label": "Individual-based simulation",
+      "category": "Spatial dynamics & mechanistic models",
+      "weight": 0.8,
+      "keywords": [
+        "individual-based model",
+        "individual based model",
+        "agent-based model",
+        "agent based model",
+        "mechanistic simulation",
+        "individual-based simulation",
+        "agent-based simulation"
+      ]
+    },
+    "digital_twins": {
+      "label": "Ecological digital twins",
+      "category": "Forecasting, digital twins, statistics & AI",
+      "weight": 0.65,
+      "keywords": [
+        "ecological digital twin",
+        "biodiversity digital twin",
+        "environmental digital twin",
+        "ecosystem digital twin",
+        "population digital twin",
+        "virtual ecosystem"
+      ]
+    },
+    "data_assimilation_forecasting": {
+      "label": "Data assimilation & forecasting",
+      "category": "Forecasting, digital twins, statistics & AI",
+      "weight": 0.85,
+      "keywords": [
+        "ecological forecasting",
+        "ecological forecast",
+        "data assimilation",
+        "state-space model",
+        "state space model",
+        "particle filter",
+        "ensemble forecast",
+        "near-term ecological forecast",
+        "iterative forecasting"
+      ]
+    },
+    "statistical_ecology": {
+      "label": "Modern statistical ecology",
+      "category": "Forecasting, digital twins, statistics & AI",
+      "weight": 0.65,
+      "keywords": [
+        "hierarchical Bayesian",
+        "Bayesian hierarchical",
+        "joint species distribution model",
+        "JSDM",
+        "INLA",
+        "causal inference",
+        "latent process",
+        "integrated modelling",
+        "integrated modeling",
+        "multi-source data"
+      ]
+    },
+    "ai_ml_ecology": {
+      "label": "AI / machine-learning ecology",
+      "category": "Forecasting, digital twins, statistics & AI",
+      "weight": 0.65,
+      "keywords": [
+        "ecological machine learning",
+        "machine learning ecology",
+        "foundation model ecology",
+        "foundation model biodiversity",
+        "deep learning biodiversity",
+        "graph neural network ecology",
+        "AI for biodiversity",
+        "artificial intelligence ecology"
+      ]
+    },
+    "eco_evolutionary": {
+      "label": "Eco-evolutionary responses",
+      "category": "Eco-evolutionary responses",
+      "weight": 0.95,
+      "keywords": [
+        "eco-evolutionary dynamics",
+        "eco evolutionary dynamics",
+        "evolutionary rescue",
+        "rapid evolution",
+        "genomic vulnerability",
+        "adaptive evolution",
+        "evolutionary response to climate change"
+      ]
+    },
+    "plasticity_adaptation": {
+      "label": "Plasticity, adaptation & population variation",
+      "category": "Eco-evolutionary responses",
+      "weight": 1.1,
+      "keywords": [
+        "thermal tolerance local adaptation",
+        "population variation CTmax",
+        "thermal plasticity",
+        "acclimation thermal tolerance",
+        "intraspecific variation climate vulnerability",
+        "local adaptation",
+        "phenotypic plasticity",
+        "acclimation capacity",
+        "population variation",
+        "intraspecific variation"
+      ]
+    },
+    "community_biodiversity": {
+      "label": "Community & biodiversity",
+      "category": "Community & biodiversity",
+      "weight": 0.8,
+      "keywords": [
+        "community assembly",
+        "ecosystem functioning",
+        "species interactions",
+        "coexistence",
+        "food web",
+        "ecological network",
+        "biodiversity loss"
+      ]
+    },
+    "global_change_earth": {
+      "label": "Global change & Earth systems",
+      "category": "Global change & Earth systems",
+      "weight": 0.8,
+      "keywords": [
+        "carbon cycle",
+        "climate extremes",
+        "tipping point",
+        "Earth system",
+        "ecosystem restoration",
+        "nature-based solutions",
+        "resilience"
+      ]
+    },
+    "transferable_methods": {
+      "label": "Transferable methods & ideas",
+      "category": "Transferable methods & ideas",
+      "weight": 0.8,
+      "keywords": [
+        "simulation-based inference",
+        "causal inference",
+        "foundation model",
+        "active learning",
+        "optimal experimental design",
+        "uncertainty quantification",
+        "probabilistic programming",
+        "scientific machine learning",
+        "neural posterior estimation",
+        "conformal prediction",
+        "data fusion",
+        "self-supervised learning",
+        "benchmark",
+        "reproducible workflow"
+      ]
+    }
+  },
+  "secondary_topics": [
+    "conservation physiology",
+    "macroecology",
+    "biodiversity",
+    "adaptation",
+    "acclimation",
+    "phenotypic plasticity",
+    "extinction risk",
+    "population vulnerability",
+    "range limits",
+    "species responses to climate change",
+    "developmental plasticity",
+    "maternal effects",
+    "thermal developmental plasticity",
+    "resilience",
+    "forecast horizon",
+    "observation model",
+    "process model",
+    "decision support"
+  ],
+  "domain_keywords": [
+    "ecology",
+    "ecological",
+    "ecosystem",
+    "evolutionary",
+    "evolution",
+    "species",
+    "biodiversity",
+    "habitat",
+    "population",
+    "demography",
+    "conservation",
+    "distribution",
+    "niche",
+    "range limit",
+    "wildlife",
+    "wild",
+    "microclimate",
+    "reptile",
+    "lizard",
+    "amphibian",
+    "fish",
+    "insect",
+    "bird",
+    "ectotherm",
+    "marine",
+    "freshwater",
+    "terrestrial"
+  ],
+  "negative_keywords": [
+    "thermal management",
+    "transformer loading",
+    "photovoltaic",
+    "heat exchanger",
+    "climate change risk perception",
+    "innovation climate",
+    "organizational climate",
+    "retracted",
+    "retraction notice",
+    "breastfeeding",
+    "pregnancy",
+    "pancreatic",
+    "insulin",
+    "diabetes",
+    "IVF",
+    "neurite",
+    "ganglion",
+    "embryonic arrest",
+    "health vulnerability",
+    "rural health",
+    "exercise",
+    "brain temperature",
+    "livestock",
+    "crossbreed",
+    "beef cattle",
+    "dairy cattle",
+    "poultry",
+    "architecture",
+    "residential building",
+    "building performance",
+    "smart factory",
+    "manufacturing",
+    "supply chain",
+    "power grid",
+    "energy system",
+    "battery",
+    "industrial process",
+    "construction",
+    "smart city",
+    "financial market",
+    "traffic management",
+    "urban climate governance",
+    "institutional coordination",
+    "aerospace"
+  ],
+  "target_journals": [
+    "Ecology Letters",
+    "Global Change Biology",
+    "Ecography",
+    "Journal of Animal Ecology",
+    "Functional Ecology",
+    "Methods in Ecology and Evolution",
+    "Global Ecology and Biogeography",
+    "Ecology",
+    "Oikos",
+    "Proceedings of the Royal Society B",
+    "Nature Ecology & Evolution",
+    "Conservation Biology",
+    "Biological Conservation",
+    "Conservation Physiology",
+    "Journal of Thermal Biology",
+    "Journal of Experimental Biology",
+    "Physiological and Biochemical Zoology",
+    "Climate Change Ecology",
+    "Diversity and Distributions",
+    "Journal of Applied Ecology",
+    "Ecological Applications",
+    "Ecological Modelling",
+    "Population Ecology",
+    "Landscape Ecology",
+    "Movement Ecology",
+    "Evolutionary Applications",
+    "Molecular Ecology",
+    "Ecology and Evolution",
+    "Environmental Modelling & Software",
+    "Nature",
+    "Science",
+    "Cell",
+    "Nature Climate Change",
+    "Nature Communications",
+    "Nature Methods",
+    "Nature Biotechnology",
+    "Nature Machine Intelligence",
+    "Nature Computational Science",
+    "Nature Sustainability",
+    "Nature Geoscience",
+    "Nature Water",
+    "Science Advances",
+    "Current Biology",
+    "Cell Systems",
+    "Trends in Ecology & Evolution",
+    "Trends in Genetics",
+    "Proceedings of the National Academy of Sciences",
+    "PNAS Nexus"
+  ],
+  "scoring": {
+    "title_multiplier": 3.0,
+    "abstract_multiplier": 1.0,
+    "topic_presence_bonus": 2.0,
+    "journal_bonus": 8.0,
+    "multiple_topic_bonus": 4.0,
+    "secondary_keyword_points": 2.0,
+    "domain_keyword_bonus": 4.0,
+    "negative_keyword_penalty": 16.0,
+    "combination_bonus": 8.0,
+    "max_raw_score_for_100": 45.0,
+    "combinations": [
+      [
+        "thermal_ecology",
+        "reptile"
+      ],
+      [
+        "thermal_ecology",
+        "life_stage"
+      ],
+      [
+        "thermal_ecology",
+        "time_dependent_tolerance"
+      ],
+      [
+        "time_dependent_tolerance",
+        "life_stage"
+      ],
+      [
+        "life_stage",
+        "climate_change"
+      ],
+      [
+        "life_stage",
+        "stage_structured_models"
+      ],
+      [
+        "microclimate",
+        "thermal_ecology"
+      ],
+      [
+        "sdm",
+        "thermal_ecology"
+      ],
+      [
+        "sdm",
+        "climate_change"
+      ],
+      [
+        "reptile",
+        "climate_change"
+      ],
+      [
+        "behaviour",
+        "thermal_ecology"
+      ],
+      [
+        "plasticity_adaptation",
+        "thermal_ecology"
+      ],
+      [
+        "plasticity_adaptation",
+        "climate_change"
+      ],
+      [
+        "population_demography",
+        "climate_change"
+      ],
+      [
+        "stage_structured_models",
+        "climate_change"
+      ],
+      [
+        "spatial_population",
+        "climate_change"
+      ],
+      [
+        "individual_based_models",
+        "behaviour"
+      ],
+      [
+        "digital_twins",
+        "data_assimilation_forecasting"
+      ],
+      [
+        "data_assimilation_forecasting",
+        "population_demography"
+      ],
+      [
+        "eco_evolutionary",
+        "climate_change"
+      ],
+      [
+        "conservation_biology",
+        "climate_change"
+      ]
+    ]
+  },
+  "delivery": {
+    "min_articles": 30,
+    "target_articles": 40,
+    "max_articles": 50,
+    "detailed_articles": 8,
+    "max_preprints": 3,
+    "max_preprint_fraction": 0.1,
+    "min_published_fraction": 0.9,
+    "cns_target_range": [
+      12,
+      18
+    ],
+    "method_idea_target_range": [
+      10,
+      15
+    ],
+    "title_only_max_fraction": 0.2,
+    "recovery_lookback_hours": [
+      336,
+      720
+    ]
+  },
+  "journal_watch": {
+    "enabled_modes": [
+      "daily",
+      "weekly-deep"
+    ],
+    "journals": [
+      {
+        "name": "Nature",
+        "issn": "0028-0836",
+        "group": "cns"
+      },
+      {
+        "name": "Science",
+        "issn": "0036-8075",
+        "group": "cns",
+        "aliases": [
+          "Science (New York, N.Y.)"
+        ]
+      },
+      {
+        "name": "Cell",
+        "issn": "0092-8674",
+        "group": "cns"
+      },
+      {
+        "name": "Nature Ecology & Evolution",
+        "issn": "2397-334X",
+        "group": "cns",
+        "aliases": [
+          "Nature Ecology and Evolution"
+        ]
+      },
+      {
+        "name": "Nature Climate Change",
+        "issn": "1758-678X",
+        "group": "cns"
+      },
+      {
+        "name": "Nature Communications",
+        "issn": "2041-1723",
+        "group": "cns"
+      },
+      {
+        "name": "Nature Methods",
+        "issn": "1548-7105",
+        "group": "cns",
+        "aliases": [
+          "Nature Methods"
+        ]
+      },
+      {
+        "name": "Nature Biotechnology",
+        "issn": "1087-0156",
+        "group": "cns"
+      },
+      {
+        "name": "Nature Machine Intelligence",
+        "issn": "2522-5839",
+        "group": "cns"
+      },
+      {
+        "name": "Nature Computational Science",
+        "issn": "2662-8457",
+        "group": "cns"
+      },
+      {
+        "name": "Nature Sustainability",
+        "issn": "2398-9629",
+        "group": "cns"
+      },
+      {
+        "name": "Nature Geoscience",
+        "issn": "1752-0894",
+        "group": "cns"
+      },
+      {
+        "name": "Nature Water",
+        "issn": "2731-6084",
+        "group": "cns"
+      },
+      {
+        "name": "Science Advances",
+        "issn": "2375-2548",
+        "group": "cns"
+      },
+      {
+        "name": "Current Biology",
+        "issn": "0960-9822",
+        "group": "cns",
+        "aliases": [
+          "Current biology : CB"
+        ]
+      },
+      {
+        "name": "Cell Systems",
+        "issn": "2405-4712",
+        "group": "cns"
+      },
+      {
+        "name": "Trends in Ecology & Evolution",
+        "issn": "0169-5347",
+        "group": "cns",
+        "aliases": [
+          "Trends in Ecology and Evolution"
+        ]
+      },
+      {
+        "name": "Trends in Genetics",
+        "issn": "0168-9525",
+        "group": "cns"
+      },
+      {
+        "name": "Proceedings of the National Academy of Sciences",
+        "issn": "0027-8424",
+        "group": "leading"
+      },
+      {
+        "name": "PNAS Nexus",
+        "issn": "2752-6542",
+        "group": "leading"
+      },
+      {
+        "name": "Ecology Letters",
+        "issn": "1461-023X",
+        "group": "ecology"
+      },
+      {
+        "name": "Global Change Biology",
+        "issn": "1354-1013",
+        "group": "ecology"
+      },
+      {
+        "name": "Methods in Ecology and Evolution",
+        "issn": "2041-210X",
+        "group": "ecology"
+      },
+      {
+        "name": "Ecography",
+        "issn": "0906-7590",
+        "group": "ecology"
+      },
+      {
+        "name": "Journal of Animal Ecology",
+        "issn": "0021-8790",
+        "group": "ecology"
+      },
+      {
+        "name": "Functional Ecology",
+        "issn": "0269-8463",
+        "group": "ecology"
+      },
+      {
+        "name": "Global Ecology and Biogeography",
+        "issn": "1466-822X",
+        "group": "ecology"
+      },
+      {
+        "name": "Ecology",
+        "issn": "0012-9658",
+        "group": "ecology"
+      }
+    ]
+  },
+  "report_timezone": "Asia/Shanghai",
+  "context_refresh": {
+    "enabled": false,
+    "registry": "config/ecology-context-sources.json",
+    "max_age_hours": 36,
+    "max_context_modules": 4,
+    "audit_required": true
+  }
+}

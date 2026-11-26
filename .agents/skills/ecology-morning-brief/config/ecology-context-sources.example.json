@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "include_projects": [],
+  "tracked_threads": [],
+  "project_files": [],
+  "discovery_terms": [],
+  "refresh": {
+    "max_thread_reads": 16,
+    "turn_limit": 6,
+    "lookback_days": 30,
+    "tracked_recheck_days": 7,
+    "max_context_modules": 4,
+    "allow_automatic_expiry": false
+  }
+}
