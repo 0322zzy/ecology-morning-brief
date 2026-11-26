@@ -1,0 +1,8 @@
+interface:
+  display_name: "Ecology Morning Brief"
+  short_description: "每日 30–50 篇：CNS、生态学与跨领域方法，优先正式发表"
+  brand_color: "#4F7B62"
+  default_prompt: "Use $ecology-morning-brief to retrieve and generate today’s broad Chinese literature brief of 30–50 papers, prioritizing published CNS-family papers and transferable methods."
+
+policy:
+  allow_implicit_invocation: true
