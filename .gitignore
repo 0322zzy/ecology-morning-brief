@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.env
+.env.*
+*.sqlite*
+*.db*
+/work/
+/outputs/
+/.ecology-morning-brief-state/
+/config/ecology-context-sources.json
+/config/interests.local.yaml
