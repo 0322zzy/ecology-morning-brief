@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import html
+import http.client
 import json
 import logging
 import os
@@ -19,6 +20,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -57,6 +59,8 @@ class Article:
     metadata_verification: dict[str, Any] = field(default_factory=dict)
     version_status: str = "canonical"
     publication_status: str = "unverified"
+    abstract_source: str = ""
+    publication_alerts: list[str] = field(default_factory=list)
 
     def serializable(self) -> dict[str, Any]:
         return asdict(self)
@@ -104,9 +108,23 @@ def clean_markup(value: str) -> str:
     return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", value or "")).split())
 
 
+def is_notice(article: Article) -> bool:
+    return (
+        article.title.casefold().startswith((
+            "correction:", "correction to:", "erratum:", "retraction:", "publisher correction:",
+            "author correction:", "expression of concern:", "editorial expression of concern:",
+        ))
+        or article.doi.startswith("10.1038/d41586-")
+        or any(term in article.publication_type.casefold() for term in
+               ("retracted publication", "retraction of publication", "published erratum"))
+    )
+
+
 def normalize_article(article: Article) -> Article:
     article.title = " ".join((article.title or "").split())
     article.abstract = clean_markup(article.abstract)
+    if not article.abstract:
+        article.abstract_source = ""
     article.journal = clean_markup(article.journal)
     article.doi = normalize_doi(article.doi)
     article.related_dois = sorted(
@@ -182,103 +200,173 @@ class SourceUnavailable(RuntimeError):
     """A configured source cannot run until its credential is provided."""
 
 
+def safe_parameters(params: dict[str, Any]) -> dict[str, Any]:
+    """Keep bibliographic request parameters but drop credentials and contact data."""
+    private_names = {"key", "apikey", "email", "mailto", "token", "accesstoken",
+                     "authorization", "password", "secret", "serpapikey", "signature"}
+    return {
+        key: "[redacted]" if re.sub(r"[^a-z0-9]", "", key.casefold()) in private_names else value
+        for key, value in params.items()
+    }
+
+
+class RequestFailure(RuntimeError):
+    def __init__(self, source: str, reason: str, status: int | None = None):
+        self.reason = reason
+        self.status = status
+        super().__init__(f"{source}: {reason}" + (f" (HTTP {status})" if status else ""))
+
+
 class APIClient:
     def __init__(self, config: dict[str, Any]):
         self.config = config
         self.query_attempts: list[dict[str, Any]] = []
+        self.channel = ""
         self.timeout = float(config.get("request_timeout_seconds", 20))
-        self.retries = int(config.get("request_retries", 3))
+        self.retries = max(1, int(config.get("request_retries", 3)))
         self.backoff = float(config.get("request_backoff_seconds", 1.0))
-        contact = os.getenv("CONTACT_EMAIL", "unknown@example.org")
+        self.max_retry_wait = float(config.get("request_max_retry_wait_seconds", 15))
+        self.next_request: dict[str, float] = {}
+        self.cooldown: dict[str, float] = {}
+        contact = os.getenv("CONTACT_EMAIL", "").strip()
         self.user_agent = os.getenv(
-            "HTTP_USER_AGENT", f"EcologyMorningBrief-CodexSkill/1.0 (mailto:{contact})"
+            "HTTP_USER_AGENT",
+            "EcologyMorningBrief-CodexSkill/1.0" + (f" (mailto:{contact})" if contact else ""),
         )
 
-    def get_json(
-        self,
-        source: str,
-        url: str,
-        params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> dict[str, Any]:
-        query = str((params or {}).get("query.bibliographic", (params or {}).get("query", (params or {}).get("search", "__source_scan__"))))
-        attempt_record = {"source": source, "query_ids": planned_query_ids(self.config, source, query), "status": "failed"}
-        self.query_attempts.append(attempt_record)
-        if params:
-            url = f"{url}?{urllib.parse.urlencode(params)}"
-        error: Exception | None = None
-        for attempt in range(1, self.retries + 1):
-            started = time.monotonic()
-            request_headers = {"User-Agent": self.user_agent, "Accept": "application/json"}
-            request_headers.update(headers or {})
-            request = urllib.request.Request(url, headers=request_headers)
-            try:
-                with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    status = getattr(response, "status", 200)
-                    payload = json.loads(response.read().decode("utf-8"))
-                if not isinstance(payload, dict):
-                    raise ValueError("API response is not a JSON object")
-                LOGGER.info(
-                    "request source=%s status=%s attempt=%s elapsed=%.2fs",
-                    source,
-                    status,
-                    attempt,
-                    time.monotonic() - started,
-                )
-                attempt_record["status"] = "ok"
-                return payload
-            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
-                error = exc
-                LOGGER.warning(
-                    "request_failed source=%s attempt=%s/%s error=%s",
-                    source,
-                    attempt,
-                    self.retries,
-                    exc,
-                )
-                if attempt < self.retries:
-                    time.sleep(self.backoff * (2 ** (attempt - 1)) + random.uniform(0, 0.25))
-        raise RuntimeError(f"{source} failed after {self.retries} attempts: {error}")
+    def get_json(self, source, url, params=None, headers=None) -> dict[str, Any]:
+        return self._request(source, url, params, headers, "application/json", self._decode_json)
 
-    def get_text(
-        self,
-        source: str,
-        url: str,
-        params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> str:
+    @staticmethod
+    def _decode_json(body: bytes) -> dict[str, Any]:
+        value = json.loads(body)
+        if not isinstance(value, dict):
+            raise ValueError("Expected a JSON object")
+        return value
+
+    def get_text(self, source, url, params=None, headers=None) -> str:
+        return self._request(source, url, params, headers, "application/xml,text/xml", bytes.decode)
+
+    def note_page(self, returned: int | None = None, total: int | None = None, error: str = "") -> None:
+        record = self.query_attempts[-1]
+        if error:
+            record.update(status="failed", error=error, failure_kind="invalid_schema")
+        else:
+            record.update(returned_records=returned, reported_total=total)
+
+    def _request(self, source, url, params, headers, accept, decode):
+        params = params or {}
+        query = str(params.get("query.bibliographic", params.get("query", params.get("search", "__source_scan__"))))
+        parts = urllib.parse.urlsplit(url)
+        host = parts.hostname or ""
+        endpoint = urllib.parse.urlunsplit((parts.scheme, parts.netloc.rsplit("@", 1)[-1], parts.path, "", ""))
+        audit_params = dict(urllib.parse.parse_qsl(parts.query, keep_blank_values=True))
+        audit_params.update(params)
+        record = {
+            "source": source, "channel": self.channel or source, "endpoint": endpoint,
+            "params": safe_parameters(audit_params),
+            "query_ids": planned_query_ids(self.config, source, query), "status": "failed",
+            "attempts": [],
+        }
+        self.query_attempts.append(record)
         if params:
-            url = f"{url}?{urllib.parse.urlencode(params)}"
-        error: Exception | None = None
+            url += ("&" if parts.query else "?") + urllib.parse.urlencode(params)
+        now = time.monotonic()
+        if self.cooldown.get(host, 0) > now:
+            record.update(status="skipped", failure_kind="rate_limit_cooldown")
+            raise RequestFailure(source, "rate_limit_cooldown")
+        pace = {"api.crossref.org": 1.0, "eutils.ncbi.nlm.nih.gov": 0.36}.get(host, 0)
+        request_headers = {"User-Agent": self.user_agent, "Accept": accept}
+        request_headers.update(headers or {})
         for attempt in range(1, self.retries + 1):
-            request_headers = {"User-Agent": self.user_agent, "Accept": "application/atom+xml,text/xml"}
-            request_headers.update(headers or {})
+            wait = self.next_request.get(host, 0) - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            started = time.monotonic()
+            self.next_request[host] = started + pace
+            detail: dict[str, Any] = {"attempt": attempt}
+            record["attempts"].append(detail)
+            retry_after = 0.0
+            code = None
             try:
-                with urllib.request.urlopen(
-                    urllib.request.Request(url, headers=request_headers), timeout=self.timeout
-                ) as response:
-                    return response.read().decode("utf-8")
-            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, UnicodeDecodeError) as exc:
-                error = exc
-                LOGGER.warning(
-                    "request_failed source=%s attempt=%s/%s error=%s",
-                    source,
-                    attempt,
-                    self.retries,
-                    exc,
-                )
-                if attempt < self.retries:
-                    time.sleep(self.backoff * (2 ** (attempt - 1)) + random.uniform(0, 0.25))
-        raise RuntimeError(f"{source} failed after {self.retries} attempts: {error}")
+                request = urllib.request.Request(url, headers=request_headers)
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    detail["http_status"] = getattr(response, "status", 200)
+                    value = decode(response.read())
+                record["status"] = "ok"
+                return value
+            except urllib.error.HTTPError as exc:
+                code = exc.code
+                detail["http_status"] = code
+                try:
+                    retry_after = self._retry_after(exc.headers.get("Retry-After", "")) if exc.headers else 0
+                    if code == 429 and host == "api.openalex.org":
+                        try:
+                            body = json.loads(exc.read(8192))
+                            if isinstance(body, dict) and body.get("reason") == "daily_budget":
+                                retry_after = max(retry_after, 3600.0)
+                        except (ValueError, OSError):
+                            pass
+                finally:
+                    exc.close()
+                reason = ("authentication_or_access" if code in (401, 403) else
+                          "rate_limited" if code == 429 else
+                          "upstream_error" if code >= 500 else "http_error")
+                retryable = code in {408, 429, 500, 502, 503, 504}
+            except (OSError, http.client.HTTPException) as exc:
+                reason = "timeout" if isinstance(getattr(exc, "reason", exc), TimeoutError) else "transport_error"
+                retryable = True
+            except ValueError:
+                reason, retryable = "invalid_response", True
+            finally:
+                detail["elapsed_seconds"] = round(time.monotonic() - started, 3)
+            detail["failure_kind"] = reason
+            if retry_after:
+                detail["retry_after_seconds"] = retry_after
+                self.cooldown[host] = time.monotonic() + retry_after
+            LOGGER.warning("request_failed source=%s kind=%s status=%s attempt=%s", source, reason, code, attempt)
+            if not retryable or attempt == self.retries or retry_after > self.max_retry_wait:
+                break
+            time.sleep(max(retry_after, self.backoff * (2 ** (attempt - 1)) + random.uniform(0, 0.25)))
+        record.update(failure_kind=reason)
+        raise RequestFailure(source, reason, code)
+
+    @staticmethod
+    def _retry_after(value: str) -> float:
+        try:
+            return max(0.0, float(int(value)))
+        except (ValueError, TypeError):
+            try:
+                return max(0.0, (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds())
+            except (ValueError, TypeError, OverflowError):
+                return 0.0
+
+
+def read_page(client, payload, path, *, total=None, empty_without_items=False):
+    """Validate an API list before counting it as a successful (possibly empty) page."""
+    items = payload
+    for key in path:
+        items = items.get(key) if isinstance(items, dict) else None
+    if items is None and empty_without_items and total == 0:
+        items = []
+    note = getattr(client, "note_page", None)
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        message = "Missing or invalid API array " + ".".join(path)
+        if note:
+            note(error=message)
+        raise RuntimeError(message)
+    if note:
+        note(len(items), total)
+    return items
 
 
 def _date_from_crossref(item: dict[str, Any], field_name: str) -> str:
     parts = (item.get(field_name) or {}).get("date-parts", [])
     if not parts or not parts[0]:
         return ""
-    values = list(parts[0]) + [1, 1]
     try:
-        return f"{int(values[0]):04d}-{int(values[1]):02d}-{int(values[2]):02d}"
+        year, month, day = (int(value) for value in parts[0][:3])
+        return datetime(year, month, day).date().isoformat()
     except (TypeError, ValueError, IndexError):
         return ""
 
@@ -292,10 +380,10 @@ def collect_crossref(
     contact = os.getenv("CONTACT_EMAIL", "")
     articles: list[Article] = []
     seen: set[str] = set()
-    partial, last_error = False, ""
+    errors: list[str] = []
+    succeeded = 0
     for query in config.get("retrieval_queries", []):
         params: dict[str, Any] = {
-            "query.bibliographic": query,
             "filter": (
                 f"from-pub-date:{start.date().isoformat()},"
                 f"until-pub-date:{end.date().isoformat()},type:journal-article"
@@ -304,17 +392,23 @@ def collect_crossref(
             "sort": "published",
             "order": "desc",
         }
+        if query:
+            params["query.bibliographic"] = query
         if contact:
             params["mailto"] = contact
         params.update(source_config.get("extra_params", {}))
         try:
             payload = client.get_json("crossref", source_config.get("endpoint", "https://api.crossref.org/works"), params)
+            message = payload.get("message")
+            total = message.get("total-results") if isinstance(message, dict) else None
+            items = read_page(client, payload, ("message", "items"), total=total)
+            succeeded += 1
         except RuntimeError as exc:
-            if not articles:
-                raise
-            partial, last_error = True, str(exc)
-            break
-        for item in (payload.get("message") or {}).get("items", []):
+            errors.append(str(exc))
+            continue
+        if isinstance(total, int) and total > int(params.get("offset", 0)) + len(items) and "offset" not in params:
+            errors.append("Crossref per-query page/record budget reached")
+        for item in items:
             doi = normalize_doi(str(item.get("DOI", "")))
             if doi and doi in seen:
                 continue
@@ -323,7 +417,7 @@ def collect_crossref(
             title_value = item.get("title") or []
             journal_value = item.get("container-title") or []
             authors = []
-            for author in item.get("author", []):
+            for author in item.get("author") or []:
                 name = " ".join(
                     part for part in (author.get("given", ""), author.get("family", "")) if part
                 ).strip()
@@ -339,14 +433,15 @@ def collect_crossref(
                 online
                 or _date_from_crossref(item, "published-print")
                 or _date_from_crossref(item, "published")
-                or _date_from_crossref(item, "created")
+
             )
             articles.append(
                 normalize_article(
                     Article(
                         title=str(title_value[0]) if title_value else "",
                         authors=authors,
-                        abstract=str(item.get("abstract", "")),
+                        abstract=str(item.get("abstract") or ""),
+                        abstract_source="Crossref author abstract",
                         journal=str(journal_value[0]) if journal_value else "",
                         published_date=published,
                         online_date=online,
@@ -355,7 +450,7 @@ def collect_crossref(
                         url=str(item.get("URL", "")),
                         sources=["crossref"],
                         publication_type=str(item.get("type", "article")),
-                        subjects=[str(x) for x in item.get("subject", [])],
+                        subjects=[str(x) for x in item.get("subject") or []],
                         related_dois=related,
                         query_ids=planned_query_ids(config, "crossref", str(query)),
                         discovery_methods=["keyword"],
@@ -363,8 +458,13 @@ def collect_crossref(
                 )
             )
             if len(articles) >= maximum:
-                return articles, partial, last_error
-    return articles, partial, last_error
+                # ISSN callers paginate themselves and use the observed raw page count.
+                if "offset" not in params:
+                    errors.append("Crossref source record budget reached")
+                return articles, bool(errors), "; ".join(dict.fromkeys(errors))
+    if not succeeded and errors:
+        raise RuntimeError(errors[0])
+    return articles, bool(errors), "; ".join(dict.fromkeys(errors))
 
 
 def collect_biorxiv(
@@ -465,22 +565,27 @@ def collect_europepmc(
                 lookup = config.get("_search_plan", {}).get("query_lookup", {}).get("europepmc", {})
                 lookup[params["query"].casefold()] = planned_query_ids(config, "europepmc", topic_query)
                 payload = client.get_json("europepmc", "https://www.ebi.ac.uk/europepmc/webservices/rest/search", params)
+                hit_count = payload.get("hitCount")
+                results = read_page(client, payload, ("resultList", "result"),
+                                    total=hit_count, empty_without_items=True)
                 succeeded += 1
             except RuntimeError as exc:
                 partial = True
                 errors.append(str(exc))
                 break
-            results = (payload.get("resultList") or {}).get("result", [])
             if not results:
+                if isinstance(hit_count, int) and hit_count > fetched:
+                    partial = True
+                    errors.append("Europe PMC returned an empty page before the reported total")
                 break
             for item in results:
                 doi = normalize_doi(str(item.get("doi", "")))
                 authors = [
                     str(author.get("fullName", "")).strip()
-                    for author in (item.get("authorList") or {}).get("author", [])
+                    for author in (item.get("authorList") or {}).get("author") or []
                     if author.get("fullName")
                 ]
-                pub_types = [str(x) for x in (item.get("pubTypeList") or {}).get("pubType", [])]
+                pub_types = [str(x) for x in (item.get("pubTypeList") or {}).get("pubType") or []]
                 is_preprint = str(item.get("source", "")).upper() == "PPR" or any("preprint" in x.casefold() for x in pub_types)
                 journal_data = ((item.get("journalInfo") or {}).get("journal") or {})
                 journal = str(
@@ -494,7 +599,8 @@ def collect_europepmc(
                         Article(
                             title=str(item.get("title", "")),
                             authors=authors,
-                            abstract=str(item.get("abstractText", "")),
+                            abstract=str(item.get("abstractText") or ""),
+                            abstract_source="Europe PMC author abstract",
                             journal=journal,
                             published_date=str(
                                 item.get("firstPublicationDate")
@@ -511,7 +617,7 @@ def collect_europepmc(
                             ),
                             sources=["europepmc"],
                             publication_type=", ".join(pub_types) or "article",
-                            keywords=[str(x) for x in (item.get("keywordList") or {}).get("keyword", [])],
+                            keywords=[str(x) for x in (item.get("keywordList") or {}).get("keyword") or []],
                             is_preprint=is_preprint,
                             query_ids=planned_query_ids(config, "europepmc", topic_query),
                             discovery_methods=["keyword"],
@@ -520,8 +626,12 @@ def collect_europepmc(
                 )
             fetched += len(results)
             next_cursor = str(payload.get("nextCursorMark", ""))
-            remaining = int(payload.get("hitCount", fetched)) > fetched
-            if not next_cursor or next_cursor == cursor or not remaining:
+            remaining = isinstance(hit_count, int) and hit_count > fetched
+            if not remaining:
+                break
+            if not next_cursor or next_cursor == cursor:
+                partial = True
+                errors.append("Europe PMC cursor ended before reported total")
                 break
             if page + 1 >= max_pages or fetched >= per_query:
                 partial = True
@@ -549,112 +659,106 @@ def _openalex_abstract(inverted_index: Any) -> str:
     return " ".join(word for _, word in sorted(positioned))
 
 
-def collect_openalex(
-    client: APIClient, config: dict[str, Any], start: datetime, end: datetime
-) -> tuple[list[Article], bool, str]:
-    """Collect recent works from OpenAlex; authentication is optional."""
-    source_config = config["sources"]["openalex"]
-    page_size = min(100, max(1, int(source_config.get("page_size", 50))))
-    maximum = int(source_config.get("max_articles", 250))
-    max_pages = max(1, int(source_config.get("max_pages_per_query", 1)))
-    max_queries = max(1, int(source_config.get("max_queries", 5)))
-    queries = list(config.get("openalex_queries", []))
-    if not queries:
-        queries = list(config.get("retrieval_queries", []))
+def openalex_article(item: dict[str, Any], query_ids: list[str], method: str) -> Article:
+    title = str(item.get("title") or item.get("display_name") or "")
+    doi = normalize_doi(str(item.get("doi") or ""))
+    location = item.get("primary_location") or {}
+    venue = location.get("source") or {}
+    work_type = str(item.get("type") or "")
+    is_preprint = work_type == "preprint" or venue.get("is_preprint_repository") is True
+    if (venue.get("type") == "journal" and location.get("version") == "publishedVersion"
+            and work_type in {"article", "review"} and not is_preprint):
+        work_type = "journal-article" if work_type == "article" else "review"
+    authors = []
+    for authorship in item.get("authorships") or []:
+        author = (authorship.get("author") or {}) if isinstance(authorship, dict) else {}
+        if author.get("display_name"):
+            authors.append(str(author["display_name"]))
+    def labels(field: str) -> list[str]:
+        return [str(value["display_name"]) for value in item.get(field) or []
+                if isinstance(value, dict) and value.get("display_name")]
+    return normalize_article(Article(
+        title=title, authors=authors, abstract=_openalex_abstract(item.get("abstract_inverted_index")),
+        abstract_source="OpenAlex author abstract", journal=str(venue.get("display_name") or ""),
+        published_date=str(item.get("publication_date") or ""), doi=doi,
+        url=f"https://doi.org/{doi}" if doi else str(location.get("landing_page_url") or item.get("id") or ""),
+        sources=["openalex"], publication_type=work_type, keywords=labels("keywords"),
+        subjects=labels("topics"), is_preprint=is_preprint, query_ids=query_ids,
+        discovery_methods=[method],
+        publication_alerts=["retracted (OpenAlex)"] if item.get("is_retracted") is True else [],
+    ))
+
+
+def collect_openalex(client: APIClient, config: dict[str, Any], start: datetime, end: datetime) -> tuple[list[Article], bool, str]:
+    settings = config["sources"]["openalex"]
+    page_size = min(100, max(1, int(settings.get("page_size", 50))))
+    maximum = int(settings.get("max_articles", 250))
+    max_pages = max(1, int(settings.get("max_pages_per_query", 1)))
+    max_queries = max(1, int(settings.get("max_queries", 5)))
+    queries = config.get("openalex_queries") or config.get("retrieval_queries", [])
+    targets = [(str(query), "", planned_query_ids(config, "openalex", str(query))) for query in queries[:max_queries]]
+    return collect_openalex_targets(client, start, end, targets, page_size=page_size,
+                                    max_pages=max_pages, maximum=maximum)
+
+
+def collect_openalex_targets(client, start, end, targets, *, page_size, max_pages=1, maximum=250):
+    """Search an explicit list of topical queries or independent ISSN windows."""
     api_key = os.getenv("OPENALEX_API_KEY", "").strip()
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
     articles: list[Article] = []
-    seen: set[str] = set()
-    partial, last_error = False, ""
-    for query in queries[:max_queries]:
+    errors: list[str] = []
+    succeeded = 0
+    for query, issn, query_ids in targets:
+        filters = [f"from_publication_date:{start.date().isoformat()}",
+                   f"to_publication_date:{end.date().isoformat()}", "type:article|review"]
+        if issn:
+            filters.append(f"primary_location.source.issn:{issn}")
+        fetched = 0
         for page in range(1, max_pages + 1):
-            params = {
-                "search": query,
-                "filter": (
-                    f"from_publication_date:{start.date().isoformat()},"
-                    f"to_publication_date:{end.date().isoformat()}"
-                ),
-                "sort": "publication_date:desc",
-                "per_page": min(page_size, maximum - len(articles)),
-                "page": page,
-            }
+            params = {"filter": ",".join(filters), "sort": "publication_date:desc",
+                      "per_page": page_size, "page": page}
+            if query:
+                params["search"] = query
             try:
-                payload = client.get_json(
-                    "openalex", "https://api.openalex.org/works", params, headers=headers
-                )
+                payload = client.get_json("openalex", "https://api.openalex.org/works", params, headers=headers)
+                meta = payload.get("meta")
+                total = meta.get("count") if isinstance(meta, dict) else None
+                records = read_page(client, payload, ("results",), total=total)
+                succeeded += 1
             except RuntimeError as exc:
-                if not articles:
-                    raise
-                partial, last_error = True, str(exc)
+                errors.append(f"{issn or ','.join(query_ids) or 'query'}: {exc}")
+                if isinstance(exc, RequestFailure) and exc.reason in {"authentication_or_access", "rate_limited", "rate_limit_cooldown"}:
+                    if not succeeded:
+                        raise
+                    return articles, True, "; ".join(dict.fromkeys(errors))
                 break
-            results = payload.get("results", [])
-            if not isinstance(results, list):
-                raise RuntimeError("openalex response has no results list")
-            for item in results:
-                if not isinstance(item, dict):
+            finally:
+                attempts = getattr(client, "query_attempts", [])
+                if attempts:
+                    attempts[-1]["query_ids"] = query_ids
+            fetched += len(records)
+            for item in records:
+                venue = ((item.get("primary_location") or {}).get("source") or {})
+                if issn and issn not in (venue.get("issn") or []) and issn != venue.get("issn_l"):
+                    errors.append(f"{issn}: unexpected venue identifier excluded")
                     continue
-                title = str(item.get("title") or item.get("display_name") or "")
-                doi = normalize_doi(str(item.get("doi", "")))
-                key = doi or str(item.get("id", "")) or normalize_title(title)
-                if not key or key in seen:
+                article = openalex_article(item, query_ids, "openalex_issn" if issn else "keyword")
+                if not article.title or article.is_preprint:
                     continue
-                seen.add(key)
-                authors = []
-                for authorship in item.get("authorships", []) or []:
-                    if not isinstance(authorship, dict):
-                        continue
-                    author = authorship.get("author") or {}
-                    name = str(author.get("display_name", "")).strip()
-                    if name:
-                        authors.append(name)
-                primary_location = item.get("primary_location") or {}
-                source = primary_location.get("source") or {}
-                landing_page = str(primary_location.get("landing_page_url", ""))
-                topics = [
-                    str(topic.get("display_name", ""))
-                    for topic in item.get("topics", []) or []
-                    if isinstance(topic, dict) and topic.get("display_name")
-                ]
-                keywords = [
-                    str(keyword.get("display_name", ""))
-                    for keyword in item.get("keywords", []) or []
-                    if isinstance(keyword, dict) and keyword.get("display_name")
-                ]
-                work_type = str(item.get("type", "article"))
-                articles.append(
-                    normalize_article(
-                        Article(
-                            title=title,
-                            authors=authors,
-                            abstract=_openalex_abstract(
-                                item.get("abstract_inverted_index")
-                            ),
-                            journal=str(source.get("display_name", "")),
-                            published_date=str(item.get("publication_date", "")),
-                            online_date=str(item.get("publication_date", "")),
-                            doi=doi,
-                            url=(
-                                f"https://doi.org/{doi}"
-                                if doi
-                                else landing_page or str(item.get("id", ""))
-                            ),
-                            sources=["openalex"],
-                            publication_type=work_type,
-                            keywords=keywords,
-                            subjects=topics,
-                            is_preprint=work_type.casefold() == "preprint",
-                            query_ids=planned_query_ids(config, "openalex", str(query)),
-                            discovery_methods=["keyword"],
-                        )
-                    )
-                )
+                if issn and article.publication_status == "published":
+                    article.discovery_methods.append("journal_watch")
+                articles.append(article)
                 if len(articles) >= maximum:
-                    return articles, partial, last_error
-            if len(results) < page_size:
+                    errors.append("OpenAlex source record budget reached")
+                    return articles, True, "; ".join(dict.fromkeys(errors))
+            remaining = total > fetched if isinstance(total, int) else len(records) == page_size
+            if not remaining or not records:
                 break
-        if partial:
-            break
-    return articles, partial, last_error
+            if page == max_pages:
+                errors.append(f"{issn or ','.join(query_ids) or 'query'}: OpenAlex page budget reached")
+    if not succeeded and errors:
+        raise RuntimeError("; ".join(dict.fromkeys(errors)))
+    return articles, bool(errors), "; ".join(dict.fromkeys(errors))
 
 
 def collect_semantic_scholar(
@@ -1130,9 +1234,16 @@ def merge_articles(left: Article, right: Article) -> Article:
     had_preprint = left.is_preprint or right.is_preprint
     had_published = (not left.is_preprint) or (not right.is_preprint)
     primary, secondary = (right, left) if left.is_preprint and not right.is_preprint else (left, right)
+    same_version = primary.is_preprint == secondary.is_preprint and (
+        not primary.doi or not secondary.doi or primary.doi == secondary.doi
+    )
+    if same_version and len(secondary.abstract) > len(primary.abstract):
+        primary.abstract = secondary.abstract
+        primary.abstract_source = secondary.abstract_source
+    if same_version:
+        primary.publication_alerts = list(dict.fromkeys(primary.publication_alerts + secondary.publication_alerts))
     for name in (
         "title",
-        "abstract",
         "journal",
         "published_date",
         "online_date",
@@ -1141,9 +1252,7 @@ def merge_articles(left: Article, right: Article) -> Article:
         "url",
         "publication_type",
     ):
-        if not getattr(primary, name) or (
-            name == "abstract" and len(getattr(secondary, name)) > len(getattr(primary, name))
-        ):
+        if not getattr(primary, name) and (same_version or name not in {"published_date", "online_date", "indexed_date"}):
             setattr(primary, name, getattr(secondary, name))
     primary.authors = list(dict.fromkeys(primary.authors + secondary.authors))
     primary.sources = sorted(set(primary.sources + secondary.sources))

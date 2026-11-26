@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -25,6 +26,7 @@ from brief_engine import (
     collect_europepmc,
     collect_google_scholar,
     collect_openalex,
+    collect_openalex_targets,
     collect_semantic_scholar,
     collect_webofscience,
     configure_logging,
@@ -33,11 +35,14 @@ from brief_engine import (
     load_config,
     normalize_title,
     journal_group,
+    is_notice,
     score_article,
+    safe_parameters,
 )
 from journal_watch import collect_journal_watch
 from search_planner import VALID_MODES, build_search_plan
 from source_router import apply_route_to_config, route_search_plan
+from supplemental_sources import collect_pubmed, recovery_targets
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -54,6 +59,7 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--plan", type=Path, help="Pre-built ecology-search-plan.json")
     value.add_argument("--state-dir", type=Path, default=default_state_dir())
     value.add_argument("--output", type=Path, help="JSON output file; defaults to stdout")
+    value.add_argument("--audit-output", type=Path, help="Audit JSON (default: alongside --output)")
     value.add_argument("--coverage-output", type=Path, help="Write ecology-coverage-report.json")
     value.add_argument("--skip-context-refresh-check", action="store_true", help="Isolated provider validation only; do not use for a scheduled daily brief")
     value.add_argument("--enable-boosters", action="store_true", help="Force eligible boosters")
@@ -63,6 +69,7 @@ def parser() -> argparse.ArgumentParser:
         choices=[
             "crossref", "biorxiv", "europepmc", "openalex",
             "semantic_scholar", "arxiv", "webofscience", "google_scholar", "journal_watch",
+            "pubmed_supplement",
         ],
         help="Limit to one or more sources (repeatable)",
     )
@@ -94,6 +101,9 @@ def _run_sources(
     for name in names:
         collector = COLLECTORS[name]
         source_config = config.get("sources", {}).get(name, {})
+        old_channel = getattr(client, "channel", None)
+        if old_channel is not None:
+            client.channel = name
         try:
             articles, partial, error = collector(client, config, start, end)
             collected.extend(articles)
@@ -114,6 +124,9 @@ def _run_sources(
                 "status": "failed", "count": 0, "error": str(exc),
                 "class": source_config.get("class", "core"),
             }
+        finally:
+            if old_channel is not None:
+                client.channel = old_channel
         provider = str(source_config.get("provider", "")).strip()
         if provider:
             statuses[name]["provider"] = provider
@@ -136,7 +149,7 @@ def _rank(articles: list[Article], config: dict[str, Any]) -> list[Article]:
 def _shortlist(
     ranked: list[Article], config: dict[str, Any], candidate_limit: int, threshold: float
 ) -> list[Article]:
-    unseen = [article for article in ranked if not article.previously_reported]
+    unseen = [article for article in ranked if not article.previously_reported and not is_notice(article)]
     # Preserve distinct discovery channels even when a paper has weak topic-keyword overlap.
     pools = {"cns": [], "journal": [], "method": [], "direct": [], "wildcard": [], "preprint": []}
     for article in unseen:
@@ -222,6 +235,65 @@ def validate_context_refresh(config: dict[str, Any], profile: dict[str, Any] | N
     return refresh
 
 
+def _supplement(client, name, collect, statuses):
+    previous_channel = client.channel
+    client.channel = name
+    try:
+        articles, partial, error = collect()
+        status = {"status": "partial" if partial else "ok", "count": len(articles)}
+        if error:
+            status["error"] = error
+        statuses[name] = status
+        return articles
+    except RuntimeError as exc:
+        statuses[name] = {"status": "failed", "count": 0, "error": str(exc)}
+        return []
+    finally:
+        client.channel = previous_channel
+
+
+def _source_counts(attempts, stages):
+    counts = {}
+    for attempt in attempts:
+        source = attempt["source"]
+        counts.setdefault(source, Counter()).update(
+            request_records=1, http_attempts=len(attempt.get("attempts", [])),
+            successful_pages=int(attempt["status"] == "ok"),
+            failed_or_skipped=int(attempt["status"] != "ok"),
+            api_returned_records=attempt.get("returned_records") or 0,
+            pages_with_record_count=int(attempt.get("returned_records") is not None),
+        )
+    for stage, records in stages.items():
+        for record in records:
+            for source in record.sources:
+                counts.setdefault(source, Counter())[stage] += 1
+    return {source: dict(values) for source, values in sorted(counts.items())}
+
+
+def _snapshot(config, plan, path, profile_path):
+    def scrub(value):
+        if isinstance(value, dict):
+            return {k: scrub(v) for k, v in safe_parameters(value).items()}
+        if isinstance(value, list):
+            return [scrub(v) for v in value]
+        return value
+
+    scripts = {
+        p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted((SKILL_DIR / "scripts").glob("*.py"))
+        if not p.name.startswith(("test_", "self_test"))
+    }
+    effective = scrub(config)
+    snapshot = {"inputs": {
+        "supplied_config_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "bundled_config_sha256": hashlib.sha256((SKILL_DIR / "config" / "interests.yaml").read_bytes()).hexdigest(),
+        "profile_sha256": hashlib.sha256(profile_path.read_bytes()).hexdigest() if profile_path else None,
+    }, "effective_config": effective, "plan": scrub(plan), "script_sha256": scripts}
+    encoded = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    snapshot["snapshot_sha256"] = hashlib.sha256(encoded).hexdigest()
+    return snapshot
+
+
 def main() -> int:
     args = parser().parse_args()
     started = time.monotonic()
@@ -244,7 +316,7 @@ def main() -> int:
     context_refresh = (profile or {}).get("_context_refresh", config.get("_context", {}).get("refresh", {}))
     if mode == "daily" and not args.skip_context_refresh_check:
         context_refresh = validate_context_refresh(config, profile, report_date=report_day)
-    selected_sources = set(args.source or COLLECTORS)
+    selected_sources = set(args.source or [*COLLECTORS, "pubmed_supplement"])
 
     statuses: dict[str, dict[str, object]] = {}
     core_sources: list[str] = []
@@ -282,19 +354,35 @@ def main() -> int:
     booster_config = config.get("search", {}).get("boosters", {})
     booster_allowed = args.enable_boosters or bool(booster_config.get(mode, False))
     booster_trigger = int(booster_config.get("trigger_min_candidates", 10))
+    recovery = config.get("search", {}).get("daily_recovery", {})
+    focused = (plan.get("context") or {}).get("retrieval_mode") == "focus"
+    adaptive = mode == "daily" and not focused and recovery.get("enabled", True)
+    attempts = list(client.query_attempts)
+    targets = (recovery_targets(config, plan, attempts, preliminary)
+               if adaptive and "openalex" in booster_sources and not args.enable_boosters else [])
+    normal_boosters = [source for source in booster_sources if not (targets and source == "openalex")]
     booster_reason = "not enabled for mode"
-    if booster_allowed and booster_sources and (
+    if booster_allowed and normal_boosters and (
         args.enable_boosters or mode != "daily" or prelim_relevant < booster_trigger
     ):
         booster_reason = (
             "deep mode" if mode != "daily"
             else f"core relevant candidates below {booster_trigger}"
         )
-        collected.extend(
-            _run_sources(booster_sources, client, config, start, end, statuses)
-        )
-    elif booster_sources:
+        collected.extend(_run_sources(normal_boosters, client, config, start, end, statuses))
+    elif normal_boosters:
         booster_reason = "core coverage sufficient" if booster_allowed else "not enabled for mode"
+    if targets:
+        collected.extend(_supplement(client, "openalex", lambda: collect_openalex_targets(
+            client, start, end, targets, page_size=min(50, max(1, int(recovery.get("page_size", 25)))),
+        ), statuses))
+        booster_reason = "bounded OpenAlex check for journal or subject coverage gaps"
+    pubmed_requested = args.source and "pubmed_supplement" in args.source
+    epmc_failed = any(attempt["source"] == "europepmc" and attempt["status"] != "ok" for attempt in attempts)
+    if "pubmed_supplement" in selected_sources and (
+        pubmed_requested or (adaptive and recovery.get("pubmed_on_europepmc_failure", True) and epmc_failed)
+    ):
+        collected.extend(_supplement(client, "pubmed_supplement", lambda: collect_pubmed(client, start, end), statuses))
 
     in_window = [
         article for article in collected
@@ -339,6 +427,7 @@ def main() -> int:
                 statuses.get(name, {}).get("status")
                 in {"ok", "partial", "failed", "unavailable"}
                 for name in booster_sources
+                if name in statuses
             ),
             "reason": booster_reason,
         },
@@ -367,6 +456,26 @@ def main() -> int:
         "duration_seconds": round(time.monotonic() - started, 2),
         "candidates": [article.serializable() for article in candidates],
     }
+    audit_path = args.audit_output or (args.output.with_suffix(".audit.json") if args.output else None)
+    if audit_path:
+        if audit_path.resolve() in {path.resolve() for path in (args.output, args.coverage_output) if path}:
+            raise ValueError("Audit and candidate/coverage output paths must be distinct")
+        snapshot = _snapshot(config, plan, args.config, args.profile)
+        payload["run_snapshot"] = {"sha256": snapshot["snapshot_sha256"], "audit_file": str(audit_path.resolve())}
+        audit = {
+            "report_date": report_day, "window": plan["window"], "sources": statuses,
+            "source_counts": _source_counts(client.query_attempts, {
+                "normalized": collected, "inside_window": in_window, "merged": unique,
+                "unseen": [a for a in ranked if not a.previously_reported], "shortlisted": candidates,
+            }),
+            "counts": payload["counts"], "requests": client.query_attempts,
+            "snapshot": snapshot,
+            "candidate_file": str(args.output.resolve()) if args.output else None,
+            "counting_note": "Provider records can overlap. Some providers lack a raw page count. A successful empty page differs from failed or skipped requests.",
+        }
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
     if args.coverage_output:
         from evaluate_coverage import build_coverage_report
 

@@ -14,6 +14,23 @@
 
 每日晨报写入 `outputs/ecology-morning-brief/`。在同一个项目中运行可沿用历史，减少重复推荐。若需要定时接收晨报，在自己的 Codex 环境中创建自动化，并选择这个项目目录。
 
+## 一键检索与测试
+
+默认检索依赖 Python 3.11 及以上的标准库。配置文件虽沿用 `.yaml` 扩展名，写入时须使用 JSON 兼容格式。下列命令在 macOS 或 Linux 上生成候选、请求审计和覆盖报告；随后可在 Codex 中基于这些记录生成中文晨报。
+
+```bash
+./run_brief.sh /path/to/project
+python3 -B -m unittest discover -s .agents/skills/ecology-morning-brief/scripts -p '*test*.py'
+```
+
+脚本优先使用项目的 `config/interests.local.yaml`。已启用聊天／项目刷新时，先在 Codex 中完成刷新，再通过 `--config` 和 `--profile` 传入生效配置与画像。审计文件与候选文件同目录保存，包含查询参数、分页、重试、阶段计数和配置 SHA-256。
+
+## 设计取舍
+
+Crossref 按 ISSN 提供出版社登记的正式版本线索，Europe PMC 补充生命科学主题与作者摘要，两者共同作为公开主源。OpenAlex 用于弥补特定期刊或方法主题的覆盖缺口，以及深搜中的有界引文扩展。PubMed 用于生命科学补检。按来源设置查询和分页上限，并在审计中记录限制。
+
+28 本种子期刊让 CNS 前沿、生态学和方法论文都有独立入口，同时把日常巡检控制在可审阅范围。增加期刊时看增量论文的质量、与其他渠道的重叠和运行成本。期刊归属用于组织阅读，发表版本与作者证据逐篇核实。
+
 ## 按需增加期刊
 
 在 Codex 中直接说：
@@ -76,3 +93,5 @@ python3 "$SKILL_DIR/scripts/extend_journal_watch.py" \
 | 生态学 | Ecology | `0012-9658` |
 
 [查看命令行检索、结果核对和去重流程](.agents/skills/ecology-morning-brief/references/retrieval-v2.md)。
+
+本仓库代码和文档采用 [MIT 许可证](LICENSE)。参与协作请见 [贡献说明](CONTRIBUTING.md)。

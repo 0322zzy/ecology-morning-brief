@@ -5,7 +5,8 @@ import argparse
 import json
 import math
 from pathlib import Path
-from brief_engine import Article, load_config, normalize_article, normalize_title, journal_group
+from brief_engine import Article, load_config, normalize_article, journal_group, is_notice
+from report_evidence import check_report
 
 
 def check_selection(records: list[dict], config: dict) -> dict:
@@ -29,7 +30,12 @@ def check_selection(records: list[dict], config: dict) -> dict:
     if any(not a.title or not (a.doi or a.url) for a in articles):
         errors.append('Every selected record needs a title and a canonical link')
     for a in articles:
-        if a.title.casefold().startswith(('correction:', 'correction to:', 'erratum:', 'retraction:', 'publisher correction:', 'author correction:')):
+        alerts = a.publication_alerts + a.metadata_verification.get("publication_alerts", [])
+        if any(any(term in value.casefold() for term in ("retract", "withdraw")) for value in alerts):
+            errors.append(f"Retracted record or retraction notice: {a.doi or a.title}")
+        if any("concern" in value.casefold() for value in alerts):
+            warnings.append(f"Expression of concern needs editorial review: {a.doi or a.title}")
+        if is_notice(a):
             errors.append('Correction/retraction notices do not count toward paper volume')
     if n > int(policy.get('max_articles', 50)):
         errors.append('Selected count exceeds delivery maximum')
@@ -50,9 +56,18 @@ def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--input',type=Path,required=True)
     parser.add_argument('--config',type=Path,default=Path(__file__).resolve().parents[1]/'config/interests.yaml')
+    parser.add_argument('--report', type=Path, help='Validate evidence labels and flag unsupported details in the rendered brief')
     parser.add_argument('--output',type=Path)
     args=parser.parse_args(); payload=load_config(args.input)
-    result=check_selection(payload.get('articles',payload.get('candidates',[])),load_config(args.config))
+    records = payload.get('articles', payload.get('candidates', []))
+    result = check_selection(records, load_config(args.config))
+    if args.report:
+        evidence = check_report(records, args.report.read_text(encoding="utf-8"))
+        result["report_evidence"] = evidence
+        result["errors"].extend(evidence["errors"])
+        if evidence["needs_review"]:
+            result["warnings"].append(f'{len(evidence["needs_review"])} entries contain details to review against available evidence')
+        result["ok"] = not result["errors"]
     encoded=json.dumps(result,ensure_ascii=False,indent=2)+'\n'
     if args.output:
         args.output.parent.mkdir(parents=True,exist_ok=True); args.output.write_text(encoded)

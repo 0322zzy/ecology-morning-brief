@@ -73,7 +73,7 @@ class BroadDiscoveryTests(unittest.TestCase):
         records,partial,_=collect_journal_watch(Client(),c,self.start,self.end)
         self.assertEqual(len(records),1);self.assertTrue(partial)
         self.assertIn('journal_watch',records[0].discovery_methods)
-        self.assertEqual(calls[0][1]['query.bibliographic'],'')
+        self.assertNotIn('query.bibliographic', calls[0][1])
         self.assertIn('ISSN:0028-0836',calls[-1][1]['query'])
 
     def test_wrong_venue_from_issn_endpoint_is_excluded(self):

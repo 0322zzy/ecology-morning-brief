@@ -72,6 +72,14 @@
       "max_terms_per_concept": 4,
       "max_concept_blocks": 4
     },
+    "daily_recovery": {
+      "enabled": true,
+      "max_journals": 3,
+      "max_topic_queries": 2,
+      "method_min_records": 3,
+      "page_size": 25,
+      "pubmed_on_europepmc_failure": true
+    },
     "citation_expansion": {
       "daily": false,
       "weekly-deep": true,

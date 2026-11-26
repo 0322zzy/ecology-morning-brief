@@ -10,20 +10,20 @@ from brief_engine import APIClient, Article, collect_crossref, collect_europepmc
 def collect_journal_watch(client: APIClient, config: dict[str, Any], start: datetime, end: datetime) -> tuple[list[Article], bool, str]:
     settings = config['sources']['journal_watch']
     journals = config.get('journal_watch', {}).get('journals', [])
-    rows = int(settings.get('rows_per_journal', 60))
-    pages = int(settings.get('max_pages_per_journal', 2))
     maximum = int(settings.get('max_articles', 2500))
     values: list[Article] = []
     errors: list[str] = []
     succeeded = 0
     # Each journal has its own budget; a high-volume journal cannot starve later journals.
     for journal in journals:
+        rows = max(1, int(journal.get('rows_per_journal', settings.get('rows_per_journal', 60))))
+        pages = max(1, int(journal.get('max_pages_per_journal', settings.get('max_pages_per_journal', 2))))
         run = copy.deepcopy(config)
         source = run['sources']['crossref']
         source.update(endpoint=f"https://api.crossref.org/journals/{journal['issn']}/works", rows_per_query=rows, max_articles=rows)
         run['retrieval_queries'] = ['']
         query_id = f"journal-{journal['issn']}"
-        run.setdefault('_search_plan', {}).setdefault('query_lookup', {}).setdefault('crossref', {})[''] = [query_id]
+        run.setdefault('_search_plan', {}).setdefault('query_lookup', {}).setdefault('crossref', {})['__source_scan__'] = [query_id]
         for page in range(pages):
             source['extra_params'] = {'offset': page*rows}
             try:
@@ -54,7 +54,11 @@ def collect_journal_watch(client: APIClient, config: dict[str, Any], start: date
             values.extend(accepted)
             if partial or error:
                 errors.append(f"{journal['name']}: {error or 'partial'}")
-            if len(records) < rows:
+            attempts = getattr(client, "query_attempts", [])
+            observed = attempts[-1] if attempts else {}
+            total = observed.get("reported_total")
+            returned = observed.get("returned_records", len(records))
+            if (isinstance(total, int) and total <= (page * rows) + returned) or returned < rows:
                 break
             if page+1 == pages:
                 errors.append(f"{journal['name']}: journal page budget reached")

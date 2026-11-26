@@ -19,7 +19,9 @@ python3 "$SKILL_DIR/scripts/build_context_config.py" --base "$BASE_CONFIG" --pro
 BASE_CONFIG=work/ecology-effective-config.json
 ```
 
-Inspect the plan's module diversity, `source_route`, per-source states and publication/channel counts. `journal_watch` browses every configured ISSN through Crossref and independent Europe PMC journal batches, without topical keywords. It preserves successful journal/provider results when others fail. `europepmc` uses independent query shards, fair per-query capacity, publication-date sorting and published-only filters. OpenAlex/Semantic Scholar/WoS are conditional boosters; `--enable-boosters` forces eligible routes without bypassing credentials. `--source` is repeatable for explicit restrictions or bounded validation. A `partial` result means incomplete retrieval, not exhaustion.
+With `--output`, the collector also writes a sibling `*.audit.json` file with observed requests, stage counts by source, effective configuration and script SHA-256 hashes. Use distinct date/window output names and link each audit in the report.
+
+Inspect the plan's module diversity, `source_route`, per-source states and publication/channel counts. `journal_watch` browses every configured ISSN through Crossref and independent Europe PMC journal batches, without topical keywords. It preserves successful journal/provider results when others fail. `europepmc` uses independent query shards, fair per-query capacity, publication-date sorting and published-only filters. OpenAlex/Semantic Scholar/WoS are conditional boosters; `--enable-boosters` forces eligible routes without bypassing credentials. `--source` is repeatable for explicit restrictions or bounded validation. A `partial` result means incomplete retrieval. Daily OpenAlex recovery prioritizes failed or capped journal queries and thin methods, with at most three journals, two topics and one page per target by default. PubMed adds two bounded physiology and biology queries if Europe PMC fails. See `search.daily_recovery` and [the evidence template](brief-template.md).
 
 ## Recover a daily shortfall
 
@@ -39,7 +41,7 @@ python3 "$SKILL_DIR/scripts/evaluate_coverage.py" --input work/ecology-candidate
 
 Resolve version/duplicate/link/ceiling errors. Warnings concern soft targets, evidence gaps or a volume shortfall and require editorial explanation. Verification errors retain records for review; they never turn an unknown version into a published one. If multiple retrieval passes contributed papers, audit each pass or merge its audit provenance as well; do not describe just the initial window as complete coverage.
 
-Write and deliver the Chinese report, then:
+Draft the Chinese report using [the evidence template](brief-template.md). Add `--report PATH` to the selection check and supply the exact final Markdown. Review any unsupported details and save the check beside the report. After delivery:
 
 ```bash
 python3 "$SKILL_DIR/scripts/mark_reported.py" --input work/ecology-selected-verified.json --state-dir .ecology-morning-brief-state

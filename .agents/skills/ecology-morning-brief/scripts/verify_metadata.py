@@ -5,13 +5,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import urllib.parse
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-from brief_engine import APIClient, load_config, normalize_doi, normalize_title
+from brief_engine import (APIClient, RequestFailure, _openalex_abstract, clean_markup,
+                          load_config, normalize_doi, normalize_title, read_page)
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -73,8 +75,17 @@ def evaluate_match(record: dict[str, Any], item: dict[str, Any], *, exact_doi_lo
         flags.append("doi_missing")
     if record.get("version_status") == "published_with_preprint":
         flags.extend(["preprint_published_pair", "duplicate_publication"])
+    alerts = []
+    if status == "exact_match":
+        for field in ("updated-by", "update-to"):
+            for update in item.get(field, []) or []:
+                kind = str(update.get("type") or update.get("label") or "").casefold()
+                if any(term in kind for term in ("retract", "concern", "withdrawal")):
+                    alerts.append(f"{kind} (Crossref)")
     return {
         "status": status,
+        "publication_alerts": list(dict.fromkeys(alerts)),
+        "author_abstract": clean_markup(str(item.get("abstract") or "")) if status == "exact_match" else "",
         "flags": list(dict.fromkeys(flags)),
         "title_similarity": round(similarity, 3),
         "canonical": {
@@ -102,7 +113,7 @@ def verify_record(client: APIClient, record: dict[str, Any]) -> dict[str, Any]:
             "https://api.crossref.org/works",
             {"query.bibliographic": str(record.get("title", "")), "rows": 3},
         )
-        items = (payload.get("message") or {}).get("items", [])
+        items = read_page(client, payload, ("message", "items"))
         if not items:
             return {
                 "status": "not_found",
@@ -128,11 +139,61 @@ def verify_record(client: APIClient, record: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-def verify_records(client: APIClient, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def recover_author_abstract(client, record, excluded):
+    """Fetch author abstracts by exact DOI, not snippets, generated text or another version."""
+    doi = normalize_doi(str(record.get("doi") or ""))
+    if not doi:
+        return "", "", []
+    target = urllib.parse.quote(doi, safe="/")
+    key = os.getenv("OPENALEX_API_KEY", "").strip()
+    headers = {"Authorization": f"Bearer {key}"} if key else None
+    alerts = []
+    if "openalex" not in excluded:
+        try:
+            work = client.get_json("openalex_abstract", f"https://api.openalex.org/works/doi:{target}",
+                                   {"select": "doi,title,is_retracted,abstract_inverted_index"}, headers)
+            if normalize_doi(str(work.get("doi") or "")) == doi:
+                if work.get("is_retracted") is True:
+                    alerts.append("retracted (OpenAlex)")
+                abstract = _openalex_abstract(work.get("abstract_inverted_index"))
+                if abstract:
+                    return abstract, "OpenAlex author abstract", alerts
+        except RuntimeError as exc:
+            if isinstance(exc, RequestFailure) and exc.reason in {"authentication_or_access", "rate_limited", "rate_limit_cooldown"}:
+                excluded.add("openalex")
+    if "europepmc" not in excluded:
+        try:
+            payload = client.get_json("europepmc_abstract", "https://www.ebi.ac.uk/europepmc/webservices/rest/search",
+                                      {"query": f'DOI:"{doi}"', "format": "json", "resultType": "core", "pageSize": 5})
+            matches = read_page(client, payload, ("resultList", "result"), total=payload.get("hitCount"),
+                                empty_without_items=True)
+            for item in matches:
+                if normalize_doi(str(item.get("doi") or "")) == doi and item.get("abstractText"):
+                    return clean_markup(item["abstractText"]), "Europe PMC author abstract", alerts
+        except RuntimeError as exc:
+            if isinstance(exc, RequestFailure) and exc.reason in {"authentication_or_access", "rate_limited", "rate_limit_cooldown"}:
+                excluded.add("europepmc")
+    return "", "", alerts
+
+
+def verify_records(client: APIClient, records: list[dict[str, Any]], max_abstract_lookups: int = 0) -> list[dict[str, Any]]:
     verified: list[dict[str, Any]] = []
+    remaining = max_abstract_lookups
+    excluded = set()
     for raw in records:
         record = dict(raw)
-        record["metadata_verification"] = verify_record(client, record)
+        verification = verify_record(client, record)
+        author_abstract = verification.pop("author_abstract", "")
+        record["metadata_verification"] = verification
+        if not record.get("abstract") and author_abstract:
+            record.update(abstract=author_abstract, evidence_level="abstract-supported",
+                          abstract_source="Crossref author abstract")
+        elif not record.get("abstract") and record.get("doi") and remaining > 0 and verification["status"] != "title_mismatch":
+            remaining -= 1
+            abstract, source, alerts = recover_author_abstract(client, record, excluded)
+            verification.setdefault("publication_alerts", []).extend(alerts)
+            if abstract:
+                record.update(abstract=abstract, abstract_source=source, evidence_level="abstract-supported")
         verified.append(record)
     return verified
 
@@ -141,6 +202,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Crossref metadata verification for selected ecology papers")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--config", type=Path, default=SKILL_DIR / "config" / "interests.yaml")
+    parser.add_argument("--max-abstract-lookups", type=int, default=8, help="Maximum missing-abstract records looked up by DOI")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     payload = load_config(args.input)
@@ -148,7 +210,9 @@ def main() -> int:
     key = "articles" if isinstance(payload.get("articles"), list) else "candidates"
     if not isinstance(payload.get(key), list):
         raise ValueError("Input must contain an articles or candidates list")
-    payload[key] = verify_records(APIClient(config), payload[key])
+    client = APIClient(config)
+    payload[key] = verify_records(client, payload[key], max_abstract_lookups=args.max_abstract_lookups)
+    payload["metadata_requests"] = client.query_attempts
     summary: dict[str, int] = {}
     for record in payload[key]:
         status = str(record.get("metadata_verification", {}).get("status", "unknown"))
